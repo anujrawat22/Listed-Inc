@@ -4,17 +4,11 @@ const OauthRouter = express.Router();
 const { google } = require("googleapis");
 const OAuth = google.auth.OAuth2;
 
-const CLIENT_ID = process.env.Client_id
-const CLIENT_SECRET = process.env.Client_secret
-const REDIRECT_URL =  process.env.redirect_url
+const CLIENT_ID = process.env.Client_id;
+const CLIENT_SECRET = process.env.Client_secret;
+const REDIRECT_URL = process.env.redirect_url;
 
-const oauthClient = new OAuth(
-  CLIENT_ID,
-  CLIENT_SECRET,
-  REDIRECT_URL
-  
- 
-);
+const oauthClient = new OAuth(CLIENT_ID, CLIENT_SECRET, REDIRECT_URL);
 
 OauthRouter.get("/login", (req, res) => {
   const scope = ["https://www.googleapis.com/auth/userinfo.email"];
@@ -60,76 +54,73 @@ OauthRouter.get("/profile", async (req, res) => {
   }
 });
 
-OauthRouter.get("/messages/unread", async(req,res)=>{
-    res.send("Authentication Sucessfull")
+OauthRouter.get("/messages/unread", async (req, res) => {
+  res.send("Authentication Sucessfull");
 
-    setInterval(processEmails , randomeInterval() * 1000)
-})
+  setInterval(processEmails, randomeInterval() * 1000);
+});
 
+const processEmails = async () => {
+  try {
+    const accessToken = req.session.accessToken;
+    const oauth2Client = new OAuth(CLIENT_ID, CLIENT_SECRET, REDIRECT_URL);
+    oauth2Client.setCredentials({ access_token: accessToken });
 
-const processEmails = async()=>{
-    try {
-        const accessToken = req.session.accessToken;
-        const oauth2Client = new OAuth(CLIENT_ID, CLIENT_SECRET, REDIRECT_URL);
-        oauth2Client.setCredentials({ access_token: accessToken });
-    
-        const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-    
-        const listMessages = async () => {
-          try {
-            const response = await gmail.users.messages.list({
-              userId: 'me',
-              q: 'is:unread', 
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+
+    const listMessages = async () => {
+      try {
+        const response = await gmail.users.messages.list({
+          userId: "me",
+          q: "is:unread",
+        });
+
+        const messages = response.data.messages;
+        if (messages && messages.length > 0) {
+          for (const message of messages) {
+            const Id = message.threadId;
+
+            const threadResponse = await gmail.users.threads.get({
+              userId: "me",
+              id: Id,
             });
-    
-            const messages = response.data.messages;
-            if (messages && messages.length > 0) {
-              for (const message of messages) {
-                const Id = message.threadId;
-    
-                
-                const threadResponse = await gmail.users.threads.get({
-                  userId: 'me',
-                  id: Id,
-                });
-                const threadMessages = threadResponse.data.messages;
-    
-                
-                if (!threadMessages.some(msg => msg.labelIds.includes('SENT') && msg.from.me)) {
-                  
-                  const reply = {
-                    threadId:Id,
-                    message: {
-                      raw: 'Your reply message here', 
-                    },
-                  };
-    
-                  await gmail.users.threads.modify({
-                    userId: 'me',
-                    id: Id
-                  });
-    
-                  console.log('Reply sent ', Id);
-                }
-              }
-            } else {
-              console.log('No new messages');
-            }
-          } catch (error) {
-            console.error('Error listing messages:', error);
-          }
-        };
-    
-        listMessages();
-      } catch (error) {
-        console.error('Error processing emails:', error);
-      }
-}
+            const threadMessages = threadResponse.data.messages;
 
-const randomeInterval = ()=>{
-    const minimum = 45
-    const maximum = 120;
-    return Math.floor(Math.random() * (maximum - minimum) + minimum)
-}
+            if (
+              !threadMessages.some(
+                (msg) => msg.labelIds.includes("SENT") && msg.from.me
+              )
+            ) {
+              const reply = {
+                threadId: Id,
+                message: {
+                  raw: "Your reply message here",
+                },
+              };
+
+              await gmail.users.messages.send(reply);
+
+              console.log("Reply sent ", Id);
+            }
+          }
+        } else {
+          console.log("No new messages");
+        }
+      } catch (error) {
+        console.error("Error listing messages:", error);
+      }
+    };
+
+    listMessages();
+  } catch (error) {
+    console.error("Error processing emails:", error);
+  }
+};
+
+const randomeInterval = () => {
+  const minimum = 45;
+  const maximum = 120;
+  return Math.floor(Math.random() * (maximum - minimum) + minimum);
+};
 
 module.exports = { OauthRouter };
